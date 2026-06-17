@@ -6,7 +6,6 @@ Main application file using Streamlit
 import streamlit as st
 import sqlite3
 import pandas as pd
-from datetime import datetime
 from bmi import calculate_bmi, get_bmi_category
 from workout import get_workout_plan
 from diet import get_diet_plan
@@ -37,49 +36,50 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+DB_PATH = 'gym.db'
+
 def init_database():
     """Initialize SQLite database and create table if not exists"""
     try:
-        conn = sqlite3.connect('gym.db')
-        cursor = conn.cursor()
-        
-        # Create users table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users(
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                age INTEGER NOT NULL,
-                height REAL NOT NULL,
-                weight REAL NOT NULL,
-                bmi REAL NOT NULL,
-                bmi_category TEXT NOT NULL,
-                created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        conn.commit()
-        conn.close()
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS users(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    age INTEGER NOT NULL,
+                    height REAL NOT NULL,
+                    weight REAL NOT NULL,
+                    bmi REAL NOT NULL,
+                    bmi_category TEXT NOT NULL,
+                    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            conn.commit()
         return True
-    except Exception as e:
-        st.error(f"Database connection error: {str(e)}")
+    except Exception:
+        st.error("Database connection error. Please try again later.")
         return False
+
+MAX_NAME_LENGTH = 100
+
+def sanitize_name(name):
+    """Sanitize user name input"""
+    return name.strip()[:MAX_NAME_LENGTH]
 
 def save_user_data(name, age, height, weight, bmi, bmi_category):
     """Save user data to database"""
     try:
-        conn = sqlite3.connect('gym.db')
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT INTO users (name, age, height, weight, bmi, bmi_category)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (name, age, height, weight, bmi, bmi_category))
-        
-        conn.commit()
-        conn.close()
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO users (name, age, height, weight, bmi, bmi_category)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (sanitize_name(name), age, height, weight, bmi, bmi_category))
+            conn.commit()
         return True
-    except Exception as e:
-        st.error(f"Error saving data: {str(e)}")
+    except Exception:
+        st.error("Error saving data. Please try again later.")
         return False
 
 def main():
@@ -121,15 +121,21 @@ def main():
         
         if not name.strip():
             errors.append("Please enter your name")
+        elif len(name.strip()) > MAX_NAME_LENGTH:
+            errors.append(f"Name must be {MAX_NAME_LENGTH} characters or fewer")
         
         if age < 10 or age > 100:
             errors.append("Age must be between 10 and 100 years")
         
         if height <= 0:
             errors.append("Height must be greater than 0")
+        elif height > 300:
+            errors.append("Height must be 300 cm or less")
         
         if weight <= 0:
             errors.append("Weight must be greater than 0")
+        elif weight > 700:
+            errors.append("Weight must be 700 kg or less")
         
         if errors:
             for error in errors:
@@ -218,15 +224,16 @@ def main():
         st.markdown("---")
         st.markdown("### 📈 Recent Users")
         try:
-            conn = sqlite3.connect('gym.db')
-            recent_users = pd.read_sql_query("SELECT name, bmi, bmi_category FROM users ORDER BY id DESC LIMIT 5", conn)
-            conn.close()
-            
+            with sqlite3.connect(DB_PATH) as conn:
+                recent_users = pd.read_sql_query(
+                    "SELECT name, bmi, bmi_category FROM users ORDER BY id DESC LIMIT 5",
+                    conn
+                )
             if not recent_users.empty:
                 st.dataframe(recent_users, use_container_width=True)
             else:
                 st.info("No users yet. Be the first!")
-        except:
+        except Exception:
             st.info("Unable to load recent users")
 
 if __name__ == "__main__":
