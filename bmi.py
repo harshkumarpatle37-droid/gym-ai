@@ -40,12 +40,21 @@ def get_bmi_category(bmi):
     
     Returns:
         str: BMI category
+    
+    Raises:
+        TypeError: If bmi is not a number
+        ValueError: If bmi is negative
     """
+    if not isinstance(bmi, (int, float)):
+        raise TypeError(f"BMI must be a number, got {type(bmi).__name__}")
+    if bmi < 0:
+        raise ValueError(f"BMI cannot be negative, got {bmi}")
+
     if bmi < 18.5:
         return "Underweight"
-    elif 18.5 <= bmi <= 24.9:
+    elif bmi <= 24.9:
         return "Normal Weight"
-    elif 25 <= bmi <= 29.9:
+    elif bmi <= 29.9:
         return "Overweight"
     else:
         return "Obese"
