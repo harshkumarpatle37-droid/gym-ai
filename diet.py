@@ -3,6 +3,10 @@ Diet Recommendation Module
 Provides diet plans based on BMI category
 """
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 def get_diet_plan(bmi_category):
     """
     Get diet recommendations based on BMI category
@@ -12,6 +16,9 @@ def get_diet_plan(bmi_category):
     
     Returns:
         str: Formatted diet plan with recommendations
+    
+    Raises:
+        ValueError: If bmi_category is not a recognized category
     """
     
     diet_plans = {
@@ -106,9 +113,9 @@ def get_diet_plan(bmi_category):
         """
     }
     
-    # Add a special case for Obese
-    if bmi_category == "Obese":
-        return diet_plans["Obese"]
-    
-    # Return plan for the category, default to Normal Weight if category not found
-    return diet_plans.get(bmi_category, diet_plans["Normal Weight"])
+    if bmi_category not in diet_plans:
+        raise ValueError(
+            f"Unknown BMI category '{bmi_category}'. "
+            f"Expected one of: {', '.join(diet_plans)}"
+        )
+    return diet_plans[bmi_category]

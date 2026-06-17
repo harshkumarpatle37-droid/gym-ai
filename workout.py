@@ -3,6 +3,10 @@ Workout Recommendation Module
 Provides workout plans based on BMI category
 """
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 def get_workout_plan(bmi_category):
     """
     Get workout recommendations based on BMI category
@@ -12,6 +16,9 @@ def get_workout_plan(bmi_category):
     
     Returns:
         str: Formatted workout plan with recommendations
+    
+    Raises:
+        ValueError: If bmi_category is not a recognized category
     """
     
     workout_plans = {
@@ -61,5 +68,9 @@ def get_workout_plan(bmi_category):
         """
     }
     
-    # Return plan for the category, default to Normal Weight if category not found
-    return workout_plans.get(bmi_category, workout_plans["Normal Weight"])
+    if bmi_category not in workout_plans:
+        raise ValueError(
+            f"Unknown BMI category '{bmi_category}'. "
+            f"Expected one of: {', '.join(workout_plans)}"
+        )
+    return workout_plans[bmi_category]

@@ -3,6 +3,8 @@ FitBot - Gym Assistant Chatbot
 Main application file using Streamlit
 """
 
+import logging
+
 import streamlit as st
 import sqlite3
 import pandas as pd
@@ -10,6 +12,8 @@ from datetime import datetime
 from bmi import calculate_bmi, get_bmi_category
 from workout import get_workout_plan
 from diet import get_diet_plan
+
+logger = logging.getLogger(__name__)
 
 # Page configuration
 st.set_page_config(
@@ -40,46 +44,41 @@ st.markdown("""
 def init_database():
     """Initialize SQLite database and create table if not exists"""
     try:
-        conn = sqlite3.connect('gym.db')
-        cursor = conn.cursor()
-        
-        # Create users table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users(
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                age INTEGER NOT NULL,
-                height REAL NOT NULL,
-                weight REAL NOT NULL,
-                bmi REAL NOT NULL,
-                bmi_category TEXT NOT NULL,
-                created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        conn.commit()
-        conn.close()
+        with sqlite3.connect('gym.db') as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS users(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    age INTEGER NOT NULL,
+                    height REAL NOT NULL,
+                    weight REAL NOT NULL,
+                    bmi REAL NOT NULL,
+                    bmi_category TEXT NOT NULL,
+                    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            conn.commit()
         return True
-    except Exception as e:
-        st.error(f"Database connection error: {str(e)}")
+    except sqlite3.Error as e:
+        logger.error("Database initialization failed: %s", e)
+        st.error(f"Database connection error: {e}")
         return False
 
 def save_user_data(name, age, height, weight, bmi, bmi_category):
     """Save user data to database"""
     try:
-        conn = sqlite3.connect('gym.db')
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT INTO users (name, age, height, weight, bmi, bmi_category)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (name, age, height, weight, bmi, bmi_category))
-        
-        conn.commit()
-        conn.close()
+        with sqlite3.connect('gym.db') as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO users (name, age, height, weight, bmi, bmi_category)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (name, age, height, weight, bmi, bmi_category))
+            conn.commit()
         return True
-    except Exception as e:
-        st.error(f"Error saving data: {str(e)}")
+    except sqlite3.Error as e:
+        logger.error("Failed to save user data for '%s': %s", name, e)
+        st.error(f"Error saving data: {e}")
         return False
 
 def main():
@@ -139,12 +138,21 @@ def main():
             height_meters = height / 100
             
             # Calculate BMI
-            bmi = calculate_bmi(weight, height_meters)
-            bmi_category = get_bmi_category(bmi)
+            try:
+                bmi = calculate_bmi(weight, height_meters)
+                bmi_category = get_bmi_category(bmi)
+            except (ValueError, TypeError) as e:
+                st.error(f"❌ BMI calculation failed: {e}")
+                st.stop()
             
             # Get recommendations
-            workout_plan = get_workout_plan(bmi_category)
-            diet_plan = get_diet_plan(bmi_category)
+            try:
+                workout_plan = get_workout_plan(bmi_category)
+                diet_plan = get_diet_plan(bmi_category)
+            except ValueError as e:
+                logger.error("Failed to get recommendations: %s", e)
+                st.error(f"\u274c Could not generate recommendations: {e}")
+                st.stop()
             
             # Save to database
             if save_user_data(name, age, height, weight, bmi, bmi_category):
@@ -218,16 +226,18 @@ def main():
         st.markdown("---")
         st.markdown("### 📈 Recent Users")
         try:
-            conn = sqlite3.connect('gym.db')
-            recent_users = pd.read_sql_query("SELECT name, bmi, bmi_category FROM users ORDER BY id DESC LIMIT 5", conn)
-            conn.close()
-            
+            with sqlite3.connect('gym.db') as conn:
+                recent_users = pd.read_sql_query(
+                    "SELECT name, bmi, bmi_category FROM users ORDER BY id DESC LIMIT 5",
+                    conn,
+                )
             if not recent_users.empty:
                 st.dataframe(recent_users, use_container_width=True)
             else:
                 st.info("No users yet. Be the first!")
-        except:
-            st.info("Unable to load recent users")
+        except sqlite3.Error as e:
+            logger.error("Failed to load recent users: %s", e)
+            st.warning("Unable to load recent users. Please try refreshing.")
 
 if __name__ == "__main__":
     main()
